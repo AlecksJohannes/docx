@@ -4,19 +4,7 @@ require 'nokogiri'
 require 'zip'
 
 module Docx
-  # The Document class wraps around a docx file and provides methods to
-  # interface with it.
-  #
-  #   # get a Docx::Document for a docx file in the local directory
-  #   doc = Docx::Document.open("test.docx")
-  #
-  #   # get the text from the document
-  #   puts doc.text
-  #
-  #   # do the same thing in a block
-  #   Docx::Document.open("test.docx") do |d|
-  #     puts d.text
-  #   end
+
   class Document
     attr_reader :xml, :doc, :zip, :styles
     
@@ -51,12 +39,60 @@ module Docx
     end
 
     def paragraphs
-      @doc.xpath('//w:document//w:body//w:p').map { |p_node| parse_paragraph_from p_node }
+      file = File.open('hello.xml', 'w')
+      @doc.xpath('//w:document//w:body//w:p').map { |p_node| file.puts(p_node) }
     end
 
-    def numberings
-      puts "-=====HOLA PAPI"
-      @doc.xpath('//w:document//w:numbering//w:num').map { |p_node| puts p_node }
+    def get_numbering_ids
+      @doc.xpath('//w:numId/@w:val').map { |node| node.value == "3" ?  nil : node.value }.compact
+    end
+
+    def get_element_by(val, index, indexer)
+      if index == 1
+        parse_paragraph_from @doc.xpath("//w:p[w:pPr/w:numPr/w:numId/@w:val=#{val}]")[index - 1]
+      elsif index == 0 
+        parse_paragraph_from @doc.xpath("//w:p[w:pPr/w:numPr/w:numId/@w:val=#{val}]")[indexer]
+      else
+        index = index - 1
+        parse_paragraph_from @doc.xpath("//w:p[w:pPr/w:numPr/w:numId/@w:val=#{val}]")[index]
+      end
+    end
+
+    def count_element_by(id)
+      @doc.xpath("//w:p[w:pPr/w:numPr/w:numId/@w:val=#{id}]").length
+    end
+
+    def get_answer_by_highlight
+      @doc.xpath("//w:p[w:r/w:rPr/w:highlight/@w:val='yellow']").map { |highlighted_node| parse_paragraph_from highlighted_node }
+    end
+
+    def count_answer_by_highlight
+      @doc.xpath("//w:p[w:r/w:rPr/w:highlight/@w:val='yellow']").length
+    end
+
+    def validate(node_ids)
+      is_validated = false
+      node_ids.each do |node_id|
+        lvl_node = @doc.xpath("//w:numId[@w:val=#{node_id}]//..//w:ilvl/@w:val").first.value
+        if lvl_node == "0"
+          answers = count_answer_by_highlight
+          questions = count_element_by(node_id)
+          if answers < questions
+            is_validated = false
+          end
+        elsif lvl_node == "1"
+          elems = count_element_by(node_id)
+          if elems < 4 || elems > 4
+            is_validated = false
+            break
+          elsif elems == 10
+            is_validated = true
+          else
+            is_validated = true
+          end
+        end
+      end
+      return is_validated
     end
 
     def bookmarks
